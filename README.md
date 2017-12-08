@@ -1,2 +1,2 @@
-# HAR-WLE-ML
-Human Activity Recognition: Weight Lifting Exercises Machine Learning
+# HAR-ML
+[Human Activity Recognition Machine Learning](HAR-ML.html)
