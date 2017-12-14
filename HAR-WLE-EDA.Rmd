@@ -1,5 +1,5 @@
 ---
-title: "Human Activity Recognition - Weight Lifting Machine Learning"
+title: "Human Activity Recognition - Weight Lifting Exploratory Data Analysis"
 author: "Maurício Collaça"
 date: "December, 5th 2017"
 output: html_document
@@ -109,7 +109,8 @@ abline(h=cumsum(table(training$user_name))/sum(table(training$user_name)), lty=2
 Heatmap ordered by hierarchical cluster dendrograms of the Euclidean distances and complete-linkage agglomeration method.
 ```{r overallCluster, echo=FALSE, fig.height=12, fig.width=12, cache=TRUE}
 rowColors <- grey.pal(nrow(m)); colColors <- grey.pal(ncol(m))
-heatmap(m, scale="column", margins=c(10,1), cexCol=1, RowSideColors=rowColors, ColSideColors=colColors, col=dataColors, labRow=NA, main)
+heatmap(m, scale="column", margins=c(10,1), cexCol=1, RowSideColors=rowColors, ColSideColors=colColors,
+        col=dataColors, labRow=NA, main="Row ordered by ")
 ```
 
 Heatmaps segmented by sensor set, ordered by hierarchical cluster of Euclidean distances and complete-linkage agglomeration method.
@@ -130,7 +131,7 @@ training %>% select(matches("total")) %>% ggpairs(columnLabels = gsub("_", "\n",
 ```
 
 #### Euler angles (pitch, roll and yaw) from sensors (belt, arm, dumbell and Forearm)
-```{r totalPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+```{r anglePairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
 training %>% select(matches("^(accel|gyros|magnet|pitch|roll|yaw).+[^xyz]$")) %>% ggpairs(columnLabels = gsub("_", "\n", names(.)))
 ```
 
@@ -202,38 +203,4 @@ training %>% select(matches("_forearm_[xyz]$")) %>%
 ```
 
 
-
-## Machine Learning
-
-### Configure paralell processing
-```{r}
-# library(parallel)
-# library(doParallel)
-# cluster <- makeCluster(detectCores() - 1) # convention to leave 1 core for OS
-# registerDoParallel(cluster)
-```
-### Configure trainControl object
-
-```{r}
-#library(caret)
-#fitControl <- trainControl(method = "cv", number = 5, allowParallel = TRUE)
-```
-
-### Develop training model
-
-```{r}
-#fit <- train(x,y, method="rf",data=Sonar,trControl = fitControl)
-```
-
-### Evaluate the model accuracy
-
-
-### Fit testing data
-
-
-### De-register parallel processing cluster
-```{r}
-# stopCluster(cluster)
-# registerDoSEQ()
-```
 
