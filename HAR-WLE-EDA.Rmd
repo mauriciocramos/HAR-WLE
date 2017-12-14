@@ -1,0 +1,239 @@
+---
+title: "Human Activity Recognition - Weight Lifting Machine Learning"
+author: "Maurício Collaça"
+date: "December, 5th 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+Read more: http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises
+
+## Data validation and transformation
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(dplyr); library(ggplot2); library(GGally); library(RColorBrewer)
+training <- read.csv("pml-training.csv", stringsAsFactors = FALSE)
+testing <- read.csv("pml-testing.csv", stringsAsFactors = FALSE)
+```
+
+The training set row and columns dimensions
+```{r echo=FALSE}
+dim(training)
+```
+
+The testing set row and columns dimensions
+```{r echo=FALSE}
+dim(testing)
+```
+
+### Missing values: NA, "#DIV/0!" or ""
+
+100 training variables have either 98% or 100% missing values.
+```{r echo=FALSE, comment=""}
+missProp <- function(x) mean(is.na(x) | (is.character(x) & x %in% c("", "#DIV/0!")))
+trainNAproportion <- round(sapply(training, missProp),2)
+table(trainNAproportion)
+trainBadVars <- names(trainNAproportion[trainNAproportion > 0])
+```
+
+100 testing variables have 100% missing values.
+```{r echo=FALSE, comment=""}
+testNAproportion <- round(sapply(testing, missProp),2)
+table(testNAproportion)
+testBadVars <- names(testNAproportion[testNAproportion > 0])
+```
+
+By visually inspecting the dataset it was concluded the high missing value proportion is due to statistics calculated in time windows and only stored at rows whose new_window = "yes", characterizing a messy data set where rows are not allways representing a single observation.  As those statistics can be recalculated from the respective raw data when and if necessary, they will be ignored.
+```{r include=FALSE}
+badVars <- unique(c(names(trainNAproportion[trainNAproportion > 0]),
+                    names(testNAproportion[testNAproportion > 0])))
+training <- select(training, -one_of(badVars))
+testing <- select(testing, -one_of(badVars))
+training$new_window <- NULL
+training$num_window <- NULL
+training$cvtd_timestamp <- NULL
+testing$new_window <- NULL
+testing$num_window <- NULL
+testing$cvtd_timestamp <- NULL
+classText <- c("A:correctly", "B:throwing elbows", "C:lifting halfway", "D:lowering halfway", "E:throwing hips")
+training <- training %>% mutate(classe = factor(classe, labels = classText), user_name = factor(user_name))
+```
+
+## Exploratory Data Analysis
+
+### Contingency table
+
+Sensor readings by classification and user
+```{r, comment=""}
+with(training, rbind(cbind(table(classe, user_name), "(total)" = table(classe)),
+                     "(total)" = c(table(user_name), length(user_name))))
+```
+
+### Heatmaps
+```{r include=FALSE}
+blue.pal <- function(n) { f <- colorRampPalette(brewer.pal(9, "Blues")) ; rev(f(n)) }
+grey.pal <- function(n) { f <- colorRampPalette(brewer.pal(9, "Greys")) ; rev(f(n)) }
+heat.pal <- function(n) { f <- colorRampPalette(brewer.pal(9, "YlOrRd")) ; rev(f(n)) }
+```
+```{r fig.height=5, fig.width=8, include=FALSE}
+imagemap <- function(x, cluster=TRUE, col, main) {
+    if(cluster) {
+        distance <- dist(x)
+        distanceT <- dist(t(x))
+        rowInd <- order.dendrogram(reorder(as.dendrogram(hclust(distance)), rowMeans(x)))
+        colInd <- order.dendrogram(reorder(as.dendrogram(hclust(distanceT)), colMeans(x)))
+        image(t(scale(x[rowInd, colInd])), col=col, axes=FALSE, main=main)
+    }
+    else {
+        image(t(scale(x)), col=col, axes=FALSE, main=main)
+    }
+    axis(1, at=seq(0,1, length=ncol(x)), labels = colnames(x), las=2, cex.axis=0.7, hadj=0.9, padj=0)
+}
+```
+
+```{r classUserClusters, echo=FALSE, fig.height=6, fig.width=10}
+dataColors <- heat.pal(4)
+par(mfrow=c(1,2), mar=c(6,1,2,1))
+m <- as.matrix(training[order(training$classe, training$user_name, training$raw_timestamp_part_1), -c(1:4,57)])
+imagemap(m, cluster=FALSE, col = dataColors, main="Rows ordered by class, user and timestamp")
+abline(h=cumsum(table(training$classe))/sum(table(training$classe)), lty=2, lwd=1)
+m <- as.matrix(training[order(training$user_name, training$classe, training$raw_timestamp_part_1), -c(1:4,57)])
+imagemap(m, cluster=FALSE, col = dataColors, main="Rows ordered by user, class and timestamp")
+abline(h=cumsum(table(training$user_name))/sum(table(training$user_name)), lty=2, lwd=1)
+```
+
+Heatmap ordered by hierarchical cluster dendrograms of the Euclidean distances and complete-linkage agglomeration method.
+```{r overallCluster, echo=FALSE, fig.height=12, fig.width=12, cache=TRUE}
+rowColors <- grey.pal(nrow(m)); colColors <- grey.pal(ncol(m))
+heatmap(m, scale="column", margins=c(10,1), cexCol=1, RowSideColors=rowColors, ColSideColors=colColors, col=dataColors, labRow=NA, main)
+```
+
+Heatmaps segmented by sensor set, ordered by hierarchical cluster of Euclidean distances and complete-linkage agglomeration method.
+```{r sensorClusters, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+par(mfrow=c(2,2), mar=c(6,1,2,1))
+dataColors <- heat.pal(10)
+training %>% select(contains("_arm")) %>% as.matrix %>% imagemap(T, dataColors, "Arm")
+training %>% select(contains("_belt")) %>% as.matrix %>% imagemap(T, dataColors, "Belt")
+training %>% select(contains("_dumbbell")) %>% as.matrix %>% imagemap(T, dataColors, "Dumbbell")
+training %>% select(contains("_forearm")) %>% as.matrix %>% imagemap(T, dataColors, "Forearm")
+```
+
+### Generalized pairs plots
+
+##### Accelerometer totals by sensor set
+```{r totalPairs, echo=FALSE, fig.height=4, fig.width=4, cache=TRUE}
+training %>% select(matches("total")) %>% ggpairs(columnLabels = gsub("_", "\n", names(.)))
+```
+
+#### Euler angles (pitch, roll and yaw) from sensors (belt, arm, dumbell and Forearm)
+```{r totalPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(matches("^(accel|gyros|magnet|pitch|roll|yaw).+[^xyz]$")) %>% ggpairs(columnLabels = gsub("_", "\n", names(.)))
+```
+
+#### Arm sensor set
+```{r armPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(contains("_arm")) %>% ggpairs(columnLabels = gsub("_", "\n", names(.)),
+                                                  title="Arm sensor set features")
+```
+```{r eval=FALSE, comment="", include=FALSE}
+training %>% select(ends_with("_arm")) %>% names
+training %>% select(matches("_arm_[xyz]$")) %>% names
+```
+
+#### Belt sensor set
+```{r beltPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(contains("_belt")) %>% ggpairs(columnLabels = gsub("_", "\n", names(.)),
+                                                   title="Belt sensor set features")
+```
+```{r eval=FALSE, comment="", include=FALSE}
+training %>% select(ends_with("_belt"), ends_with("_belt.1")) %>% names
+training %>% select(matches("_belt_[xyz]$")) %>% names
+```
+
+#### Dumbbell sensor set
+```{r dumbbellPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(contains("_dumbbell")) %>% ggpairs(columnLabels = gsub("_", "\n", names(.)),
+                                                       title="Dumbbell sensor set features")
+```
+```{r eval=FALSE, comment="", include=FALSE}
+training %>% select(ends_with("_dumbbell")) %>% names
+training %>% select(matches("_dumbbell_[xyz]$")) %>% names
+```
+
+#### Forearm sensor set
+```{r forearmPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(contains("_forearm")) %>% ggpairs(columnLabels = gsub("_", "\n", names(.)),
+                                                      title="Forearm sensor set features")
+```
+```{r eval=FALSE, comment="", include=FALSE}
+training %>% select(ends_with("_forearm")) %>% names
+training %>% select(matches("_forearm_[xyz]$")) %>% names
+```
+
+#### Axial signals
+
+##### Arm axial signals
+```{r axialArmPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(matches("_arm_[xyz]$")) %>%
+    ggpairs(columnLabels = gsub("_", "\n", names(.)),
+            title="Arm, Belt, Dumbbell and Forearm sensor set axial (XYZ) features")
+```
+
+##### Belt axial signals
+```{r axialBeltPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(matches("_belt_[xyz]$")) %>%
+    ggpairs(columnLabels = gsub("_", "\n", names(.)))
+```
+
+##### Dumbbell axial signals
+```{r axialDumbbellPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(matches("_dumbbell_[xyz]$")) %>%
+    ggpairs(columnLabels = gsub("_", "\n", names(.)))
+```
+
+##### Forearm axial signals
+```{r axialForearmPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(matches("_forearm_[xyz]$")) %>%
+    ggpairs(columnLabels = gsub("_", "\n", names(.)))
+```
+
+
+
+## Machine Learning
+
+### Configure paralell processing
+```{r}
+# library(parallel)
+# library(doParallel)
+# cluster <- makeCluster(detectCores() - 1) # convention to leave 1 core for OS
+# registerDoParallel(cluster)
+```
+### Configure trainControl object
+
+```{r}
+#library(caret)
+#fitControl <- trainControl(method = "cv", number = 5, allowParallel = TRUE)
+```
+
+### Develop training model
+
+```{r}
+#fit <- train(x,y, method="rf",data=Sonar,trControl = fitControl)
+```
+
+### Evaluate the model accuracy
+
+
+### Fit testing data
+
+
+### De-register parallel processing cluster
+```{r}
+# stopCluster(cluster)
+# registerDoSEQ()
+```
+
