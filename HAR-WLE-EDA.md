@@ -88,9 +88,9 @@ The new training and test set row and columns dimensions
 Exploratory Data Analysis
 -------------------------
 
-### [Heatmaps](HAR-WLE-heatmaps)
+### [Heatmaps](HAR-WLE-heatmaps.md)
 
-### [Generalized pairs plots](HAR-WLE-heatmaps)
+### [Generalized pairs plots](HAR-WLE-heatmaps.md)
 
 ### Faceted scatter plots
 
