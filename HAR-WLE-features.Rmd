@@ -1,8 +1,8 @@
 ---
 title: 'HAR WLE Feature recreation'
 author: "Maurício Collaça"
-date: "December, 5th 2017"
-output: html_document
+date: "December 5, 2017"
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
@@ -13,7 +13,7 @@ This document analyzes the "#DIV/0!" issue found in many features (statistics) o
 
 ## Data loading
 ```{r message=FALSE, warning=FALSE}
-library(dplyr); library(ggplot2); library(GGally)
+library(dplyr)
 training <- read.csv("pml-training.csv", stringsAsFactors = FALSE)
 testing <- read.csv("pml-testing.csv", stringsAsFactors = FALSE)
 ```

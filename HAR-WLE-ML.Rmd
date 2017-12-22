@@ -1,8 +1,8 @@
 ---
 title: "Human Activity Recognition - Weight Lifting Machine Learning"
 author: "Maurício Collaça"
-date: "December, 5th 2017"
-output: html_document
+date: "December 5, 2017"
+output: github_document
 ---
 
 ```{r setup, include=FALSE}

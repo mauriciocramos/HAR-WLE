@@ -1,0 +1,98 @@
+---
+title: "WLE Heatmaps"
+author: "Maurício Collaça"
+date: "December 5, 2017"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Heatmaps
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(dplyr); library(ggplot2); library(GGally); library(RColorBrewer)
+source("HAR-WLE-utils.R")
+training <- read.csv("pml-training.csv", stringsAsFactors = FALSE)
+testing <- read.csv("pml-testing.csv", stringsAsFactors = FALSE)
+WLEdataCleanup()
+```
+
+### Generalized pairs plots
+
+##### Accelerometer totals by sensor set
+```{r totalPairs, echo=FALSE, fig.height=4, fig.width=4, cache=TRUE}
+training %>% select(matches("total")) %>% ggpairs(columnLabels = gsub("_", "\n", names(.)))
+```
+
+#### Euler angles (pitch, roll and yaw) from sensors (belt, arm, dumbell and Forearm)
+```{r anglePairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(matches("^(accel|gyros|magnet|pitch|roll|yaw).+[^xyz]$")) %>% ggpairs(columnLabels = gsub("_", "\n", names(.)))
+```
+
+#### Arm sensor set
+```{r armPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(contains("_arm")) %>% ggpairs(columnLabels = gsub("_", "\n", names(.)),
+                                                  title="Arm sensor set features")
+```
+```{r eval=FALSE, comment="", include=FALSE}
+training %>% select(ends_with("_arm")) %>% names
+training %>% select(matches("_arm_[xyz]$")) %>% names
+```
+
+#### Belt sensor set
+```{r beltPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(contains("_belt")) %>% ggpairs(columnLabels = gsub("_", "\n", names(.)),
+                                                   title="Belt sensor set features")
+```
+```{r eval=FALSE, comment="", include=FALSE}
+training %>% select(ends_with("_belt"), ends_with("_belt.1")) %>% names
+training %>% select(matches("_belt_[xyz]$")) %>% names
+```
+
+#### Dumbbell sensor set
+```{r dumbbellPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(contains("_dumbbell")) %>% ggpairs(columnLabels = gsub("_", "\n", names(.)),
+                                                       title="Dumbbell sensor set features")
+```
+```{r eval=FALSE, comment="", include=FALSE}
+training %>% select(ends_with("_dumbbell")) %>% names
+training %>% select(matches("_dumbbell_[xyz]$")) %>% names
+```
+
+#### Forearm sensor set
+```{r forearmPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(contains("_forearm")) %>% ggpairs(columnLabels = gsub("_", "\n", names(.)),
+                                                      title="Forearm sensor set features")
+```
+```{r eval=FALSE, comment="", include=FALSE}
+training %>% select(ends_with("_forearm")) %>% names
+training %>% select(matches("_forearm_[xyz]$")) %>% names
+```
+
+#### Axial signals
+
+##### Arm axial signals
+```{r axialArmPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(matches("_arm_[xyz]$")) %>%
+    ggpairs(columnLabels = gsub("_", "\n", names(.)),
+            title="Arm, Belt, Dumbbell and Forearm sensor set axial (XYZ) features")
+```
+
+##### Belt axial signals
+```{r axialBeltPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(matches("_belt_[xyz]$")) %>%
+    ggpairs(columnLabels = gsub("_", "\n", names(.)))
+```
+
+##### Dumbbell axial signals
+```{r axialDumbbellPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(matches("_dumbbell_[xyz]$")) %>%
+    ggpairs(columnLabels = gsub("_", "\n", names(.)))
+```
+
+##### Forearm axial signals
+```{r axialForearmPairs, echo=FALSE, fig.height=9, fig.width=9, cache=TRUE}
+training %>% select(matches("_forearm_[xyz]$")) %>%
+    ggpairs(columnLabels = gsub("_", "\n", names(.)))
+```
