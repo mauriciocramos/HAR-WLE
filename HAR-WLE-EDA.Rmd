@@ -82,7 +82,7 @@ dim(training); dim(testing)
 #### TODO: What are the pitch, roll, yaw and total_accel units?
 
 #### All features by sensor set and users
-```{r}
+```{r include=FALSE}
 prepareFacet <- function(data, groups, features, color, lhsName, lhsPattern, lhsReplacement, rhsName, rhsPattern, rhsReplacement) {
     data %>%
         select(matches(groups), matches(features), matches(color)) %>%
