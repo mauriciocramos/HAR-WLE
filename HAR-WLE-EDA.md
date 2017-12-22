@@ -90,7 +90,7 @@ Exploratory Data Analysis
 
 ### [Heatmaps](HAR-WLE-heatmaps.md)
 
-### [Generalized pairs plots](HAR-WLE-heatmaps.md)
+### [Generalized pairs plots](HAR-WLE-ggpairs.md)
 
 ### Faceted scatter plots
 
