@@ -100,21 +100,6 @@ Exploratory Data Analysis
 
 #### All features by sensor set and users
 
-``` r
-prepareFacet <- function(data, groups, features, color, lhsName, lhsPattern, lhsReplacement, rhsName, rhsPattern, rhsReplacement) {
-    data %>%
-        select(matches(groups), matches(features), matches(color)) %>%
-        mutate_at(vars(matches(groups)), factor) %>%
-        mutate_at(vars(matches(color)), factor) %>%
-        gather(key="feature", value = "value", -matches(groups), -matches(color), factor_key = TRUE) %>%
-        mutate(!!lhsName := factor(sub(lhsPattern, lhsReplacement, feature)),
-               !!rhsName := factor(sub(rhsPattern, rhsReplacement, feature)),
-               feature = NULL) %>%
-        group_by_at(vars(matches(groups), lhsName, rhsName)) %>% mutate(index=row_number()) %>% ungroup() %>%
-        select(matches(groups), lhsName, rhsName, value, index, matches(color)) # %>% arrange() %>% ???
-}
-```
-
 ![](HAR-WLE-EDA_files/figure-markdown_github/allFeatures-1.png)
 
 #### Accelerometer features by sensors and users
