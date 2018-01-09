@@ -1,0 +1,151 @@
+---
+title: "WLE Boxplots"
+author: "Maurício Collaça"
+date: "December 5, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(dplyr); library(tidyr); library(ggplot2);
+training <- read.csv("pml-training.csv", na.strings=c("NA","","#DIV/0!"))
+testing <- read.csv("pml-testing.csv", na.strings=c("NA","","#DIV/0!"))
+source("HAR-WLE-utils.R"); WLEdataCleanup()
+```
+```{r include=FALSE}
+prepareFacet <- function(data, groups, features, color, lhsName, lhsPattern, lhsReplacement, rhsName, rhsPattern, rhsReplacement) {
+    data %>%
+        select(matches(groups), matches(features), matches(color)) %>%
+        mutate_at(vars(matches(groups)), factor) %>%
+        mutate_at(vars(matches(color)), factor) %>%
+        gather(key="feature", value = "value", -matches(groups), -matches(color), factor_key = TRUE) %>%
+        mutate(!!lhsName := factor(sub(lhsPattern, lhsReplacement, feature)),
+               !!rhsName := factor(sub(rhsPattern, rhsReplacement, feature)),
+               feature = NULL) %>%
+        group_by_at(vars(matches(groups), lhsName, rhsName)) %>% mutate(index=row_number()) %>% ungroup() %>%
+        select(matches(groups), lhsName, rhsName, value, index, matches(color))
+}
+```
+
+#### All features faceted on sensor set
+```{r allFeatureBoxplot, echo=FALSE, fig.height=10, fig.width=20, cache=TRUE}
+data <- prepareFacet(data = training,
+                     groups = "user_name",
+                     color = "classe",
+                     features = "(_arm|_belt|_dumbbell|_forearm)",
+                     lhsName = "sensor_set",
+                     lhsPattern = "^.+_(arm|belt|dumbbell|forearm)_?.*$",
+                     lhsReplacement = "\\1",
+                     rhsName = "signal",
+                     rhsPattern = "^(.+)_(arm|belt|dumbbell|forearm)(_?)(.*)$",
+                     rhsReplacement = "\\1\\3\\4")
+ggplot(data, aes(x=classe, y=value, fill=classe)) + theme_bw() +
+    theme(legend.position = "top", axis.text.x=element_blank(), axis.ticks.x=element_blank()) +
+    ggtitle("Boxplots of all features faceted on sensor set") +
+    facet_grid(sensor_set ~ signal,
+               margins=FALSE, scales="free", space="free", shrink=TRUE, switch="y") +
+    geom_boxplot()
+```
+
+#### Accelerometer features faceted on sensor
+```{r accelBoxplot, echo=FALSE, fig.height=10, fig.width=20, cache=TRUE}
+data <- prepareFacet(data = training,
+                     groups = "user_name",
+                     color = "classe",
+                     features = "accel",
+                     lhsName = "sensor_set",
+                     lhsPattern = "^.+_(arm|belt|dumbbell|forearm)_?.*$",
+                     lhsReplacement = "\\1",
+                     rhsName = "signal",
+                     rhsPattern = "^(.+)_(arm|belt|dumbbell|forearm)(_?)(.*)$",
+                     rhsReplacement = "\\1\\3\\4")
+ggplot(data, aes(x=classe, y=value, fill=classe)) + theme_bw() +
+    theme(legend.position = "top", axis.text.x=element_blank(), axis.ticks.x=element_blank()) +
+    ggtitle("Boxplots of Accelerometer features faceted on sensor set") +
+    facet_grid(sensor_set ~ signal,
+               margins=FALSE, scales="free", space="free", shrink=TRUE, switch="y") +
+    geom_boxplot()
+```
+
+#### Magnetometer features faceted on sensor set
+```{r magnetBoxplot, echo=FALSE, fig.height=10, fig.width=20, cache=TRUE}
+data <- prepareFacet(data = training,
+                     groups = "user_name",
+                     color = "classe",
+                     features = "^magnet.+[xyz]$",
+                     lhsName = "sensor_set",
+                     lhsPattern = "^.+_(arm|belt|dumbbell|forearm)_?.*$",
+                     lhsReplacement = "\\1",
+                     rhsName = "signal",
+                     rhsPattern = "^(.+)_(arm|belt|dumbbell|forearm)(_?)(.*)$",
+                     rhsReplacement = "\\1\\3\\4")
+ggplot(data, aes(x=classe, y=value, fill=classe)) + theme_bw() +
+    theme(legend.position = "top", axis.text.x=element_blank(), axis.ticks.x=element_blank()) +
+    ggtitle("Boxplots of magnetometer features faceted on sensor set") +
+    facet_grid(sensor_set ~ signal,
+               margins=FALSE, scales="free", space="free", shrink=TRUE, switch="y") +
+    geom_boxplot()
+```
+
+#### Total accelerometer feature faceted on sensor set
+```{r totalAccelBoxplot, echo=FALSE, fig.height=10, fig.width=20, cache=TRUE}
+data <- prepareFacet(data = training,
+                     groups = "user_name",
+                     color = "classe",
+                     features = "^total_accel",
+                     lhsName = "sensor_set",
+                     lhsPattern = "^.+_(arm|belt|dumbbell|forearm)_?.*$",
+                     lhsReplacement = "\\1",
+                     rhsName = "signal",
+                     rhsPattern = "^(.+)_(arm|belt|dumbbell|forearm)(_?)(.*)$",
+                     rhsReplacement = "\\1\\3\\4")
+ggplot(data, aes(x=classe, y=value, fill=classe)) + theme_bw() +
+    theme(legend.position = "top", axis.text.x=element_blank(), axis.ticks.x=element_blank()) +
+    ggtitle("Boxplots of total accelerometer faceted on users and sensor set") +
+    facet_grid(sensor_set ~ signal,
+               margins=FALSE, scales="free", space="free", shrink=TRUE, switch="y") +
+    geom_boxplot()
+```
+
+#### Gyroscope features faceted on sensor set
+```{r gyrosBoxplot, echo=FALSE, fig.height=10, fig.width=20, cache=TRUE}
+data <- prepareFacet(data = training,
+                     groups = "user_name",
+                     color = "classe",
+                     features = "^gyros.+[xyz]$",
+                     lhsName = "sensor_set",
+                     lhsPattern = "^.+_(arm|belt|dumbbell|forearm)_?.*$",
+                     lhsReplacement = "\\1",
+                     rhsName = "signal",
+                     rhsPattern = "^(.+)_(arm|belt|dumbbell|forearm)(_?)(.*)$",
+                     rhsReplacement = "\\1\\3\\4")
+ggplot(data, aes(x=classe, y=value, fill=classe)) + theme_bw() +
+    theme(legend.position = "top", axis.text.x=element_blank(), axis.ticks.x=element_blank()) +
+    ggtitle("Boxplots of gyroscope features faceted on sensor set") +
+    facet_grid(sensor_set ~ signal,
+               margins=FALSE, scales="free", space="fixed", shrink=TRUE, switch="y") +
+    geom_boxplot()
+```
+
+#### Euler angle features faceted on sensor set
+```{r eulerAngleBoxplot, echo=FALSE, fig.height=10, fig.width=20, cache=TRUE}
+data <- prepareFacet(data = training,
+                     groups = "user_name",
+                     color = "classe",
+                     features = "^(pitch|roll|yaw)_(arm|belt|dumbbell|forearm)$",
+                     lhsName = "sensor_set",
+                     lhsPattern = "^.+_(arm|belt|dumbbell|forearm)_?.*$",
+                     lhsReplacement = "\\1",
+                     rhsName = "signal",
+                     rhsPattern = "^(.+)_(arm|belt|dumbbell|forearm)(_?)(.*)$",
+                     rhsReplacement = "\\1\\3\\4")
+ggplot(data, aes(x=classe, y=value, fill=classe)) + theme_bw() +
+    theme(legend.position = "top", axis.text.x=element_blank(), axis.ticks.x=element_blank()) +
+    ggtitle("Boxplots of Euler angle features faceted on sensor set") +
+    facet_grid(sensor_set ~ signal,
+              margins=FALSE, scales="free", space="free", shrink=TRUE, switch="y") +
+    geom_boxplot()
+```

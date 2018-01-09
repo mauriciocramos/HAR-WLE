@@ -2,22 +2,20 @@
 title: "WLE Heatmaps"
 author: "Maurício Collaça"
 date: "December 5, 2017"
-output: github_document
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-### Heatmaps
+## Data validation and transformation
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 library(dplyr); library(RColorBrewer)
-source("HAR-WLE-utils.R")
-training <- read.csv("pml-training.csv", stringsAsFactors = FALSE)
-testing <- read.csv("pml-testing.csv", stringsAsFactors = FALSE)
-WLEdataCleanup()
+training <- read.csv("pml-training.csv", na.strings=c("NA","","#DIV/0!"))
+testing <- read.csv("pml-testing.csv", na.strings=c("NA","","#DIV/0!"))
+source("HAR-WLE-utils.R"); WLEdataCleanup()
 ```
-
 ```{r include=FALSE}
 blue.pal <- function(n) { f <- colorRampPalette(brewer.pal(9, "Blues")) ; rev(f(n)) }
 grey.pal <- function(n) { f <- colorRampPalette(brewer.pal(9, "Greys")) ; rev(f(n)) }
