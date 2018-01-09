@@ -2,44 +2,237 @@
 title: "Human Activity Recognition - Weight Lifting Machine Learning"
 author: "Maurício Collaça"
 date: "December 5, 2017"
-output: github_document
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Machine Learning
+## Summary
 
-### Configure paralell processing
-```{r}
-# library(parallel)
-# library(doParallel)
-# cluster <- makeCluster(detectCores() - 1) # convention to leave 1 core for OS
-# registerDoParallel(cluster)
+Six participants using sensors on the belt, forearm, arm and a dumbbell were asked to perform one set of 10 repetitions of the unilateral dumbbell biceps curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). This experiment results a dataset.
+
+More information about this experiment [here](http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises).
+
+The goal is to train a machine learning model using [training data](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv) to predict the manner in which 20 [testing cases](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv) did the exercise.
+
+The estimated model accuracy to correctly predict all 20 tests with 95% confidence is `r round(0.95^(1/20),4)`, the developed model accuracy reached 0.9971 and the expected out of sample error is at least 1 of the 20 test cases.
+
+## Data validation and transformation
+
+Required libraries:
+```{r libraries, message=FALSE, warning=FALSE, include=FALSE}
+library(dplyr); library(tidyr); library(ggplot2); library(GGally); library(caret)
 ```
-### Configure trainControl object
-
-```{r}
-#library(caret)
-#fitControl <- trainControl(method = "cv", number = 5, allowParallel = TRUE)
-```
-
-### Develop training model
-
-```{r}
-#fit <- train(x,y, method="rf",data=Sonar,trControl = fitControl)
+```{r, ref.label="libraries", eval=FALSE}
 ```
 
-### Evaluate the model accuracy
-
-
-### Fit testing data
-
-
-### De-register parallel processing cluster
+Reading data with three types of missing values "NA", "" and "#DIV/0!".
 ```{r}
-# stopCluster(cluster)
-# registerDoSEQ()
+training <- read.csv("pml-training.csv", na.strings=c("NA","","#DIV/0!"))
+testing <- read.csv("pml-testing.csv", na.strings=c("NA","","#DIV/0!"))
+```
+
+The training set has `r nrow(training)` rows and `r ncol(training)` columns.  The testing set has `r nrow(testing)` rows and `r ncol(testing)` columns.  This is a multi-variate time-series dataset where each observation is indentified by the variable `X`.  Each observation belongs to a specific user name and exercise class, occurring one series of time windows, second and miliseconds. They hold variables containing raw data and summary statistics from the four sensors. The time-series observations are grouped by `classe`:
+```{r fig.height=2, fig.width=10}
+ggplot(training, aes(x=1:nrow(training), y=X, color=classe)) + geom_point() + xlab("rows")
+```
+
+This contingency table shows training data reasonably distributed across users and classe:
+```{r comment=""}
+with(training, rbind(cbind(table(user_name, classe), "(total)" = table(user_name)),
+                     "(total)" = c(table(classe), length(classe)))) %>% knitr::kable()
+```
+
+100 training variables have high incidence of missing values.
+```{r comment=""}
+NA.proportion <- function(x) mean(is.na(x))
+table(NA.proportion=round(sapply(training, NA.proportion),2))
+```
+
+100 testing variables have 100% missing values.
+```{r comment=""}
+table(NA.proportion=sapply(testing, NA.proportion))
+```
+
+Those missing values are due to statistics calculated in time windows recorded at rows whose column `new_window` = "yes", characterizing a messy data set where rows are not always representing a single observation.
+
+As the prediction model is being developed for the specific 20 testing cases, it should only hold predictors with actual data on both training and testing sets, therefore, variables with missing data will be dropped.
+
+```{r}
+missedTrainVars <- names(which(sapply(training, function(x) any(is.na(x)))))
+missedTestVars <- names(which(sapply(testing, function(x) any(is.na(x)))))
+missedVars <- unique(c(missedTrainVars, missedTestVars))
+training <- select(training, -one_of(missedVars))
+```
+
+Training observations of a given user and classe are grouped in time windows of 1 second, therefore the average readings per window or per second are the same:
+```{r comment=""}
+group_by(training, user_name, classe) %>%
+    summarise(readings_per_second=n()/n_distinct(num_window)) %>%
+    select(user_name, classe, readings_per_second) %>% spread(classe, readings_per_second) %>%
+    knitr::kable(col.names = gsub("_"," ",names(.)))
+```
+
+Testing data contains only one observation per time window.
+```{r comment=""}
+with(testing, rbind(table(num_window, user_name), "(total)" = table(user_name)))
+```
+
+Therefore, the machine learning model wouldn't predict on time-related variables and so they are dropped.
+```{r}
+select(training, matches("window|timestamp")) %>% names()
+training <- select(training, -matches("window|timestamp"))
+```
+
+The row identification variable `X` has no purpose in the training model and so it is dropped.
+```{r}
+training$X <- NULL
+```
+
+Redefining classe factor labels for more meaningful values.
+```{r}
+levels(training$classe) <- c("A)correctly", "B)throwing elbows", "C)lifting halfway", "D)lowering halfway", "E)throwing hips")
+```
+
+As both training and testings set contain the variable user_name, it will be leveraged in the model for user-refined predictions.
+
+The new training set has `r nrow(training)` rows and `r ncol(training)` columns.
+
+## Exploratory Data Analysis
+
+The following plot matrix shows feature patterns accross the 5 classes, faceting on the 4 sensor sets. It must be zoomed to 200% for proper viewing.
+
+```{r allFeatureBoxplot, echo=FALSE, fig.height=10, fig.width=20, cache=TRUE}
+prepareFacet <- function(data, groups, features, color, lhsName, lhsPattern, lhsReplacement, rhsName, rhsPattern, rhsReplacement) {
+    data %>%
+        select(matches(groups), matches(features), matches(color)) %>%
+        mutate_at(vars(matches(groups)), factor) %>%
+        mutate_at(vars(matches(color)), factor) %>%
+        gather(key="feature", value = "value", -matches(groups), -matches(color), factor_key = TRUE) %>%
+        mutate(!!lhsName := factor(sub(lhsPattern, lhsReplacement, feature)),
+               !!rhsName := factor(sub(rhsPattern, rhsReplacement, feature)),
+               feature = NULL) %>%
+        group_by_at(vars(matches(groups), lhsName, rhsName)) %>% mutate(index=row_number()) %>% ungroup() %>%
+        select(matches(groups), lhsName, rhsName, value, index, matches(color))
+}
+data <- prepareFacet(data = training,
+                     groups = "user_name",
+                     color = "classe",
+                     features = "(_arm|_belt|_dumbbell|_forearm)",
+                     lhsName = "sensor_set",
+                     lhsPattern = "^.+_(arm|belt|dumbbell|forearm)_?.*$",
+                     lhsReplacement = "\\1",
+                     rhsName = "signal",
+                     rhsPattern = "^(.+)_(arm|belt|dumbbell|forearm)(_?)(.*)$",
+                     rhsReplacement = "\\1\\3\\4")
+ggplot(data, aes(x=classe, y=value, fill=classe)) + theme_bw() +
+    theme(legend.position = "top", axis.text.x=element_blank(), axis.ticks.x=element_blank()) +
+    ggtitle("Boxplots of all features faceted on sensor set") +
+    facet_grid(sensor_set ~ signal,
+               margins=FALSE, scales="free", space="free", shrink=TRUE, switch="y") +
+    geom_boxplot()
+```
+
+One can see the gyroscope-related features show the smallest range followed by the total acceleration and the pitch features.  There are many outliers such as in magnetometer features with oustanding ones specifically in the magnet_dumbbell_feature.
+
+It's assumed that the Random Forest alghorithm will not be much influenced by outliers so their treatment is out of the scope of this project.
+
+## Model development
+
+```{r include=FALSE}
+(estimatedAccuracy <- 0.95^(1/20))
+```
+The estimated model accuracy to correctly predict all 20 tests with 95% confidence is $0.95^{\frac{1}{20}}$ which is `r estimatedAccuracy`.
+
+The supervised machine learning algorithm used is the Breiman's random forest from the r package `randomForest` version `r packageVersion("randomForest")`.  One advantage is the accuracy and disadvantages are on speed, interpretability and overfitting.  A constant random number generator seed is allways set to ensure reproducibility.
+
+Through the meta-package `caret` version `r packageVersion("caret")`, predictive models are fit over different random forest's tunning parameter values and k-fold cross-validation resamples with the largest number of folds possible for a limited time duration and hardware resources, resulting a fairly optimized model for high accuracy predictions.
+
+The random forest tunning parameter `mtry` sets the number of variables randomly sampled as candidates at each tree split. As the outcome `classe` is a categorical value, that's a classification and the recommended default value is the maximum integer not greater than the square root of the number of predictors. The random forest tunning parameter `ntree` sets the number of trees to grow during the execution and it`s default value is 500.
+
+The training speed is improved through parallel processing, allowing multiple executions of the random forest at same time according to the number of CPU cores.
+```{r message=FALSE, comment=""}
+library(parallel); library(doParallel)
+cluster <- makeCluster(detectCores())
+registerDoParallel(cluster)
+cluster
+```
+
+The default tunning parameter `mtry` is `r floor(sqrt(ncol(training) - 1))`.
+
+Tunning parameters calculated by the random forest's function `tuneRF()`.
+```{r tuneRF, cache=TRUE}
+tuneRFGrid <- expand.grid(stepFactor = 1.5, improve = 0.001, ntreeTry = c(50, 250, 500))
+clusterExport(cluster, "training")
+ptm <- proc.time()
+tunes <- parApply(cluster, tuneRFGrid, 1, function(param) {
+    set.seed(1)
+    ptm <- proc.time()
+    tune <- randomForest::tuneRF(x=training[,-ncol(training)], y=training$classe, trace=FALSE, plot = FALSE,
+                   stepFactor=param["stepFactor"], improve=param["improve"], ntreeTry=param["ntreeTry"])
+    c(tune[which.min(tune[,2]),], (proc.time()-ptm)[3])
+})
+proc.time() - ptm
+tunes <- bind_cols(tuneRFGrid, as.data.frame(t(tunes)))
+knitr::kable(tunes)
+```
+
+Tune grid set from the range of the default and the best `mtry` parameter.
+```{r, comment=""}
+tuneRange <- range(floor(sqrt(ncol(training) - 1)), tunes$mtry[which.min(tunes$OOBError)])
+tuneGrid <- data.frame(mtry = min(tuneRange):max(tuneRange))
+tuneGrid$mtry
+```
+
+The best `ntree` parameter tunned.
+```{r, comment=""}
+(ntree <- tunes$ntreeTry[which.min(tunes$OOBError)])
+```
+
+In the sequence, it's used the cross-validation k-fold resampling technique with a number of folds to minimize the prediction bias by training random forest models and pick the one with the best accuracy.
+
+```{r fit2, cache=TRUE, comment=""}
+set.seed(1)
+ptm <- proc.time()
+fit <- train(classe ~ ., training, method = "rf", tuneGrid = tuneGrid, ntree=ntree, 
+             trControl = trainControl(method = "cv", number = 10, search = "grid"))
+proc.time() - ptm
+```
+
+Disable paralell processing
+```{r}
+stopCluster(cluster)
+registerDoSEQ()
+```
+
+The training summary shows the accuracy of the best model resulted 10 k-fold cross-validation and the random forest's tunned parameters.
+```{r, comment=""}
+fit
+```
+
+The confusion matrix shows how well the model performed over the training data.
+```{r, comment=""}
+confusionMatrix(fit)
+```
+
+## Expected out of sample error
+
+Due to some possible overfitting, the expected out of sample error rate is no less than:
+```{r, comment=""}
+(expectedError <- (1 - fit$results$Accuracy[which.min(fit$results$Accuracy)]))
+```
+
+As errors are integer counts, the expected out of sample error is at least:
+```{r, comment=""}
+ceiling(nrow(testing) * expectedError)
+```
+
+## Prediction of 20 test cases.
+
+The prediction model is used to predict 20 different cases.  At this time the correct answers are not available therefore it is not possible do produce a confusion matrix and the model accuracy on the testing data. 
+```{r}
+cbind(testing[, c("user_name","problem_id")],  prediction=predict(fit, testing)) %>% knitr::kable()
 ```
 
