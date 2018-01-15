@@ -36,7 +36,7 @@ training <- read.csv("pml-training.csv", na.strings=c("NA","","#DIV/0!"))
 testing <- read.csv("pml-testing.csv", na.strings=c("NA","","#DIV/0!"))
 ```
 
-The training set has `r nrow(training)` rows and `r ncol(training)` columns.  The testing set has `r nrow(testing)` rows and `r ncol(testing)` columns.  This is a multi-variate time-series dataset where each observation is indentified by the variable `X`.  Each observation belongs to a specific user name and exercise class, occurring one series of time windows, second and miliseconds. They hold variables containing raw data and summary statistics from the four sensors. The time-series observations are grouped by `classe`:
+The training set has `r nrow(training)` rows and `r ncol(training)` columns.  The testing set has `r nrow(testing)` rows and `r ncol(testing)` columns.  This is a multi-variate time-series dataset where each observation is identified by the variable `X`.  Each observation belongs to a specific user name and exercise class, occurring one series of time windows, second and milliseconds. They hold variables containing raw data and summary statistics from the four sensors. The time-series observations are grouped by `classe`:
 ```{r grouping, fig.height=2, fig.width=10}
 ggplot(training, aes(x=1:nrow(training), y=X, color=classe)) + geom_point() + xlab("rows")
 ```
@@ -99,7 +99,7 @@ The new training set has `r nrow(training)` rows and `r ncol(training)` columns.
 
 ## Exploratory Data Analysis
 
-The following plot matrix shows feature patterns accross the 5 classes, faceting on the 4 sensor sets. It must be zoomed to 200% for proper viewing.
+The following plot matrix shows feature patterns across the 5 classes, faceting on the 4 sensor sets. It must be zoomed to 200% for proper viewing.
 
 ```{r allFeatureBoxplot, echo=FALSE, fig.height=10, fig.width=20, cache=TRUE}
 prepareFacet <- function(data, groups, features, color, lhsName, lhsPattern, lhsReplacement, rhsName, rhsPattern, rhsReplacement) {
@@ -133,9 +133,9 @@ ggplot(data, aes(x=classe, y=value, fill=classe)) + theme_bw() +
     geom_boxplot()
 ```
 
-One can see the gyroscope-related features show the smallest range followed by the total acceleration and the pitch features.  There are many outliers such as in magnetometer features with oustanding ones specifically in the magnet_dumbbell_feature.
+One can see the gyroscope-related features show the smallest range followed by the total acceleration and the pitch features.  There are many outliers such as in magnetometer features with outstanding ones specifically in the magnet_dumbbell_feature.
 
-It's assumed that the Random Forest alghorithm will not be much influenced by outliers so their treatment is out of the scope of this project.
+It's assumed that the Random Forest algorithm will not be much influenced by outliers so their treatment is out of the scope of this project.
 
 ## Model development
 
@@ -153,7 +153,7 @@ training <- training[ inTraining,]
 probing  <- training[-inTraining,]
 ```
 
-The prediction algorithm to be used is the Breiman's random forest from the r package `randomForest` version `r packageVersion("randomForest")`.  One advantage is the accuracy and disadvantages are on speed, interpretability and overfitting. Its tunning parameter `mtry` sets the number of variables randomly sampled as candidates at each tree split. As the outcome `classe` is a categorical value, that's a classification task whose default is the maximum integer lower than the square root of the number of predictors. Its tunning parameter `ntree` sets the number of trees to grow during the execution whose default is 500.
+The prediction algorithm to be used is the Breiman's random forest from the r package `randomForest` version `r packageVersion("randomForest")`.  One advantage is the accuracy and disadvantages are on speed, interpretability and overfitting. Its tuning parameter `mtry` sets the number of variables randomly sampled as candidates at each tree split. As the outcome `classe` is a categorical value, that's a classification task whose default is the maximum integer lower than the square root of the number of predictors. Its tuning parameter `ntree` sets the number of trees to grow during the execution whose default is 500.
 
 The training speed is improved through parallel processing, allowing multiple executions of the random forest at same time according to the number of CPU cores.
 ```{r message=FALSE, comment=""}
@@ -163,7 +163,7 @@ registerDoParallel(cluster)
 cluster
 ```
 
-For this dataset, the default tunning parameter `mtry` is:
+For this dataset, the default tuning parameter `mtry` is:
 ```{r}
 floor(sqrt(ncol(training) - 1))
 ```
@@ -191,7 +191,7 @@ The optimal `mtry` and `ntree` parameters have the minimum out-of-bag error.
 (ntree <- tunes$ntreeTry[which.min(tunes$OOBError)])
 ```
 
-Cross-validation is also used to train different models with different resamples and tunning parameters in order to minimize the prediction bias, calculate a resampling based average accuracy and find the optimal model.  Through the meta-package `caret` version `r packageVersion("caret")`, a k-fold cross-validation is performed with default 10 fold resampling to fit random forest models with different a grid of tunning parameters set from the range of the default and the optimal `mtry` parameter, considering the optimal `ntree` parameter.
+Cross-validation is also used to train different models with different resamples and tuning parameters in order to minimize the prediction bias, calculate a resampling based average accuracy and find the optimal model.  Through the meta-package `caret` version `r packageVersion("caret")`, a k-fold cross-validation is performed with default 10 fold resampling to fit random forest models with different a grid of tuning parameters set from the range of the default and the optimal `mtry` parameter, considering the optimal `ntree` parameter.
 
 The tune grid:
 ```{r, comment=""}
@@ -209,7 +209,7 @@ fit <- train(classe ~ ., training, method = "rf", tuneGrid = tuneGrid, ntree=ntr
 proc.time() - ptm
 ```
 
-Disable paralell processing
+Disable parallel processing
 ```{r}
 stopCluster(cluster)
 registerDoSEQ()
