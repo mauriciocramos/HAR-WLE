@@ -13,11 +13,13 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Six participants using sensors on the belt, forearm, arm and a dumbbell were asked to perform one set of 10 repetitions of the unilateral dumbbell biceps curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). This experiment results a dataset.
 
+<center>![](on-body-sensing-schema.png)</center>
+
 More information about this experiment [here](http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises).
 
 The goal is to train a machine learning model using [training data](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv) to predict the manner in which 20 [testing cases](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv) did the exercise.
 
-The estimated model accuracy to correctly predict all 20 tests with 95% confidence is `r round(0.95^(1/20),4)`, the developed model accuracy reached 0.9971 and the expected out of sample error is at least 1 of the 20 test cases.
+The required model accuracy to correctly predict all 20 tests with 95% confidence is `r round(0.95^(1/20),4)`.  The estimated model accuracy is 0.9931. The estimated out-of-sample error is 0.0069.
 
 ## Data validation and transformation
 
@@ -35,7 +37,7 @@ testing <- read.csv("pml-testing.csv", na.strings=c("NA","","#DIV/0!"))
 ```
 
 The training set has `r nrow(training)` rows and `r ncol(training)` columns.  The testing set has `r nrow(testing)` rows and `r ncol(testing)` columns.  This is a multi-variate time-series dataset where each observation is indentified by the variable `X`.  Each observation belongs to a specific user name and exercise class, occurring one series of time windows, second and miliseconds. They hold variables containing raw data and summary statistics from the four sensors. The time-series observations are grouped by `classe`:
-```{r fig.height=2, fig.width=10}
+```{r grouping, fig.height=2, fig.width=10}
 ggplot(training, aes(x=1:nrow(training), y=X, color=classe)) + geom_point() + xlab("rows")
 ```
 
@@ -80,7 +82,7 @@ Testing data contains only one observation per time window.
 with(testing, rbind(table(num_window, user_name), "(total)" = table(user_name)))
 ```
 
-Therefore, the machine learning model wouldn't predict on time-related variables and so they are dropped.
+Therefore, it's assumed the machine learning model wouldn't predict on time-related variables and so they are dropped.
 ```{r}
 select(training, matches("window|timestamp")) %>% names()
 training <- select(training, -matches("window|timestamp"))
@@ -91,12 +93,7 @@ The row identification variable `X` has no purpose in the training model and so 
 training$X <- NULL
 ```
 
-Redefining classe factor labels for more meaningful values.
-```{r}
-levels(training$classe) <- c("A)correctly", "B)throwing elbows", "C)lifting halfway", "D)lowering halfway", "E)throwing hips")
-```
-
-As both training and testings set contain the variable user_name, it will be leveraged in the model for user-refined predictions.
+As both training and testings set contain the variable `user_name`, it will be leveraged in the model for user-refined predictions.
 
 The new training set has `r nrow(training)` rows and `r ncol(training)` columns.
 
@@ -127,6 +124,7 @@ data <- prepareFacet(data = training,
                      rhsName = "signal",
                      rhsPattern = "^(.+)_(arm|belt|dumbbell|forearm)(_?)(.*)$",
                      rhsReplacement = "\\1\\3\\4")
+levels(data$classe) <- c("A)correctly", "B)throwing elbows", "C)lifting halfway", "D)lowering halfway", "E)throwing hips")
 ggplot(data, aes(x=classe, y=value, fill=classe)) + theme_bw() +
     theme(legend.position = "top", axis.text.x=element_blank(), axis.ticks.x=element_blank()) +
     ggtitle("Boxplots of all features faceted on sensor set") +
@@ -144,13 +142,18 @@ It's assumed that the Random Forest alghorithm will not be much influenced by ou
 ```{r include=FALSE}
 (estimatedAccuracy <- 0.95^(1/20))
 ```
-The estimated model accuracy to correctly predict all 20 tests with 95% confidence is $0.95^{\frac{1}{20}}$ which is `r estimatedAccuracy`.
+The estimated model accuracy to correctly predict all 20 tests with 95% confidence is $0.95 ^ \left(\frac{1}{20}\right)$ which is `r estimatedAccuracy`.  Consequently, the expected error rate is `r 1-estimatedAccuracy`.
 
-The supervised machine learning algorithm used is the Breiman's random forest from the r package `randomForest` version `r packageVersion("randomForest")`.  One advantage is the accuracy and disadvantages are on speed, interpretability and overfitting.  A constant random number generator seed is allways set to ensure reproducibility.
+Cross-validation will be used to prevent overfitting and to find more precise estimates of accuracy and out-of-sample error, therefore, the former training data is partitioned in two sets model training and probing.  Assuming it's a medium sample size and as per suggested by the specialization course, the split is 60% for training and 40% for probing.  A constant random number generator seed is always set to ensure reproducibility.
 
-Through the meta-package `caret` version `r packageVersion("caret")`, predictive models are fit over different random forest's tunning parameter values and k-fold cross-validation resamples with the largest number of folds possible for a limited time duration and hardware resources, resulting a fairly optimized model for high accuracy predictions.
+```{r}
+set.seed(1)
+inTraining <- createDataPartition(training$classe, p = .60, list = FALSE)
+training <- training[ inTraining,]
+probing  <- training[-inTraining,]
+```
 
-The random forest tunning parameter `mtry` sets the number of variables randomly sampled as candidates at each tree split. As the outcome `classe` is a categorical value, that's a classification and the recommended default value is the maximum integer not greater than the square root of the number of predictors. The random forest tunning parameter `ntree` sets the number of trees to grow during the execution and it`s default value is 500.
+The prediction algorithm to be used is the Breiman's random forest from the r package `randomForest` version `r packageVersion("randomForest")`.  One advantage is the accuracy and disadvantages are on speed, interpretability and overfitting. Its tunning parameter `mtry` sets the number of variables randomly sampled as candidates at each tree split. As the outcome `classe` is a categorical value, that's a classification task whose default is the maximum integer lower than the square root of the number of predictors. Its tunning parameter `ntree` sets the number of trees to grow during the execution whose default is 500.
 
 The training speed is improved through parallel processing, allowing multiple executions of the random forest at same time according to the number of CPU cores.
 ```{r message=FALSE, comment=""}
@@ -160,11 +163,14 @@ registerDoParallel(cluster)
 cluster
 ```
 
-The default tunning parameter `mtry` is `r floor(sqrt(ncol(training) - 1))`.
+For this dataset, the default tunning parameter `mtry` is:
+```{r}
+floor(sqrt(ncol(training) - 1))
+```
 
-Tunning parameters calculated by the random forest's function `tuneRF()`.
+However, the `randomForest` package makes available the function `tuneRF()` to tune for the optimal `mtry` parameter with respect to Out-of-Bag error estimate.  This function is employed in a simulation to also estimate the optimal `ntree` parameter:
 ```{r tuneRF, cache=TRUE}
-tuneRFGrid <- expand.grid(stepFactor = 1.5, improve = 0.001, ntreeTry = c(50, 250, 500))
+tuneRFGrid <- expand.grid(stepFactor = 1.5, improve = 0.001, ntreeTry = c(50, 250, 500, 750, 1000))
 clusterExport(cluster, "training")
 ptm <- proc.time()
 tunes <- parApply(cluster, tuneRFGrid, 1, function(param) {
@@ -179,21 +185,23 @@ tunes <- bind_cols(tuneRFGrid, as.data.frame(t(tunes)))
 knitr::kable(tunes)
 ```
 
-Tune grid set from the range of the default and the best `mtry` parameter.
+The optimal `mtry` and `ntree` parameters have the minimum out-of-bag error.
+```{r, comment=""}
+(mtry <- tunes$mtry[which.min(tunes$OOBError)])
+(ntree <- tunes$ntreeTry[which.min(tunes$OOBError)])
+```
+
+Cross-validation is also used to train different models with different resamples and tunning parameters in order to minimize the prediction bias, calculate a resampling based average accuracy and find the optimal model.  Through the meta-package `caret` version `r packageVersion("caret")`, a k-fold cross-validation is performed with default 10 fold resampling to fit random forest models with different a grid of tunning parameters set from the range of the default and the optimal `mtry` parameter, considering the optimal `ntree` parameter.
+
+The tune grid:
 ```{r, comment=""}
 tuneRange <- range(floor(sqrt(ncol(training) - 1)), tunes$mtry[which.min(tunes$OOBError)])
 tuneGrid <- data.frame(mtry = min(tuneRange):max(tuneRange))
 tuneGrid$mtry
 ```
 
-The best `ntree` parameter tunned.
-```{r, comment=""}
-(ntree <- tunes$ntreeTry[which.min(tunes$OOBError)])
-```
-
-In the sequence, it's used the cross-validation k-fold resampling technique with a number of folds to minimize the prediction bias by training random forest models and pick the one with the best accuracy.
-
-```{r fit2, cache=TRUE, comment=""}
+The 10 k-fold cross-validated random forest model training using the tune grid:
+```{r fit, cache=TRUE, comment=""}
 set.seed(1)
 ptm <- proc.time()
 fit <- train(classe ~ ., training, method = "rf", tuneGrid = tuneGrid, ntree=ntree, 
@@ -207,32 +215,40 @@ stopCluster(cluster)
 registerDoSEQ()
 ```
 
-The training summary shows the accuracy of the best model resulted 10 k-fold cross-validation and the random forest's tunned parameters.
+The training summary shows the accuracy of the best model resulted from 10 k-fold cross-validation and the final `mtry` parameter.
 ```{r, comment=""}
 fit
 ```
 
-The confusion matrix shows how well the model performed over the training data.
+The confusion matrix estimated from the training resamples:
 ```{r, comment=""}
-confusionMatrix(fit)
+confusionMatrix.train(fit)
 ```
 
-## Expected out of sample error
-
-Due to some possible overfitting, the expected out of sample error rate is no less than:
-```{r, comment=""}
-(expectedError <- (1 - fit$results$Accuracy[which.min(fit$results$Accuracy)]))
+On the training data, the expected out of sample error is:
+```{r}
+(expectedError <- (1 - fit$results$Accuracy[which.max(fit$results$Accuracy)]))
 ```
 
-As errors are integer counts, the expected out of sample error is at least:
-```{r, comment=""}
-ceiling(nrow(testing) * expectedError)
+Predicting on the probing set.
+```{r}
+probePredict <- predict(fit, probing)
 ```
 
-## Prediction of 20 test cases.
+The confusion matrix calculated from the probing set suggests that the expected out of sample error could be even closer to zero when doing the final testing.
+```{r, comment=""}
+confusionMatrix(probePredict, probing$classe)
+```
 
-The prediction model is used to predict 20 different cases.  At this time the correct answers are not available therefore it is not possible do produce a confusion matrix and the model accuracy on the testing data. 
+## Prediction of 20 test cases
+
+The prediction model is used to predict 20 test cases required from the quiz.
+
 ```{r}
 cbind(testing[, c("user_name","problem_id")],  prediction=predict(fit, testing)) %>% knitr::kable()
 ```
+
+## References
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
 
